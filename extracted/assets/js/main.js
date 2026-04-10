@@ -7,7 +7,10 @@
 
     // Global App Object
     window.Stand120 = {
-        config: {},
+        // Eagerly read config so that template $(document).ready() handlers
+        // (registered before main.js loads) already have ajax_url & nonce
+        // available when they call Stand120.ajax().
+        config: window.stand120_ajax || {},
         data: {},
         cache: {},
         
