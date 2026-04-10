@@ -39,6 +39,8 @@ class Stand120_Chopping_Inventory {
         $packs_gotten = floatval($data['packs_gotten'] ?? 0);
         $remarks = sanitize_textarea_field($data['remarks'] ?? '');
         $staff_id = Stand120_Auth::get_current_staff_id();
+        $is_admin = Stand120_Auth::is_admin();
+        $admin_opening = isset($data['opening_whole']) && $is_admin ? floatval($data['opening_whole']) : null;
         
         if (!$product_id) {
             return array('success' => false, 'message' => 'Product ID required');
@@ -65,18 +67,28 @@ class Stand120_Chopping_Inventory {
             $import_whole = self::get_import_whole($product_id, $date);
         }
         
+        // If admin provided an explicit opening value, use it
+        if ($admin_opening !== null) {
+            $opening = $admin_opening;
+        }
+        
         // Calculate closing = opening + import - prepared
         $closing = $opening + $import_whole - $prepared;
         
         if ($existing) {
             // Update existing
-            $wpdb->update($table, array(
+            $update_data = array(
                 'prepared_whole' => $prepared,
                 'closing_whole' => $closing,
                 'packs_gotten' => $packs_gotten,
                 'remarks' => $remarks,
                 'staff_id' => $staff_id
-            ), array('id' => $existing->id));
+            );
+            // Persist admin-provided opening value
+            if ($admin_opening !== null) {
+                $update_data['opening_whole'] = $opening;
+            }
+            $wpdb->update($table, $update_data, array('id' => $existing->id));
         } else {
             // Insert new
             $wpdb->insert($table, array(
@@ -308,12 +320,6 @@ class Stand120_Chopping_Inventory {
      * Get chopping inventory history
      */
     public static function get_history($filters = array()) {
-        // Self-heal: fix opening/closing mismatches before fetching
-        self::recalculate_records(
-            $filters['date_from'] ?? null,
-            $filters['date_to'] ?? null
-        );
-        
         global $wpdb;
         $table = $wpdb->prefix . 'stand120_chopping_inventory';
         $products_table = $wpdb->prefix . 'stand120_products';

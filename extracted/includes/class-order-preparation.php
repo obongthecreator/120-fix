@@ -23,6 +23,8 @@ class Stand120_Order_Preparation {
         $total_sold = floatval($data['total_sold'] ?? 0);
         $remarks = sanitize_textarea_field($data['remarks'] ?? '');
         $staff_id = Stand120_Auth::get_current_staff_id();
+        $is_admin = Stand120_Auth::is_admin();
+        $admin_opening = isset($data['opening_value']) && $is_admin ? floatval($data['opening_value']) : null;
         
         if (!$product_id) {
             return array('success' => false, 'message' => 'Product ID required');
@@ -47,18 +49,28 @@ class Stand120_Order_Preparation {
             $opening = $prev_record ? $prev_record->closing_value : 0;
         }
         
+        // If admin provided an explicit opening value, use it
+        if ($admin_opening !== null) {
+            $opening = $admin_opening;
+        }
+        
         // Calculate closing
         $closing = $opening + $total_added - $total_sold;
         
         if ($existing) {
             // Update existing
-            $wpdb->update($table, array(
+            $update_data = array(
                 'total_added' => $total_added,
                 'total_sold' => $total_sold,
                 'closing_value' => $closing,
                 'remarks' => $remarks,
                 'staff_id' => $staff_id
-            ), array('id' => $existing->id));
+            );
+            // Persist admin-provided opening value
+            if ($admin_opening !== null) {
+                $update_data['opening_value'] = $opening;
+            }
+            $wpdb->update($table, $update_data, array('id' => $existing->id));
         } else {
             // Insert new
             $wpdb->insert($table, array(

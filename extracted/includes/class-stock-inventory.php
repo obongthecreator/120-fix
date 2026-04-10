@@ -37,6 +37,8 @@ class Stand120_Stock_Inventory {
         $date = sanitize_text_field($data['date'] ?? date('Y-m-d'));
         $used_packs = floatval($data['used_packs'] ?? 0);
         $staff_id = Stand120_Auth::get_current_staff_id();
+        $is_admin = Stand120_Auth::is_admin();
+        $admin_opening = isset($data['opening_packs']) && $is_admin ? floatval($data['opening_packs']) : null;
         
         if (!$product_id) {
             return array('success' => false, 'message' => 'Product ID required');
@@ -77,17 +79,27 @@ class Stand120_Stock_Inventory {
             }
         }
         
+        // If admin provided an explicit opening value, use it
+        if ($admin_opening !== null) {
+            $opening = $admin_opening;
+        }
+        
         // Calculate closing
         $closing = $opening + $added - $used_packs;
         
         if ($existing) {
             // Update existing - include added_packs since it may have been refreshed from source
-            $wpdb->update($table, array(
+            $update_data = array(
                 'added_packs' => $added,
                 'used_packs' => $used_packs,
                 'closing_packs' => $closing,
                 'staff_id' => $staff_id
-            ), array('id' => $existing->id));
+            );
+            // Persist admin-provided opening value
+            if ($admin_opening !== null) {
+                $update_data['opening_packs'] = $opening;
+            }
+            $wpdb->update($table, $update_data, array('id' => $existing->id));
         } else {
             // Insert new
             $wpdb->insert($table, array(
@@ -329,12 +341,6 @@ class Stand120_Stock_Inventory {
      * Get stock inventory history
      */
     public static function get_history($filters = array()) {
-        // Self-heal: fix opening/closing mismatches before fetching
-        self::recalculate_records(
-            $filters['date_from'] ?? null,
-            $filters['date_to'] ?? null
-        );
-        
         global $wpdb;
         $table = $wpdb->prefix . 'stand120_stock_inventory';
         $products_table = $wpdb->prefix . 'stand120_products';

@@ -966,12 +966,19 @@ window.OrderPreparation = {
         const sold = parseFloat($row.find('.prep-sold').val()) || 0;
         const date = $('#prepDate').val() || new Date().toISOString().split('T')[0];
         
-        Stand120.ajax('save_order_preparation', {
+        const data = {
             product_id: productId,
             date: date,
             total_added: added,
             total_sold: sold
-        }).then(response => {
+        };
+        
+        // Include opening value so admin inline edits are persisted
+        if (Stand120.config.is_admin) {
+            data.opening_value = parseFloat($row.find('.prep-opening').val()) || 0;
+        }
+        
+        Stand120.ajax('save_order_preparation', data).then(response => {
             if (response.success) {
                 $row.addClass('saved');
                 setTimeout(() => $row.removeClass('saved'), 500);
@@ -1080,11 +1087,18 @@ window.StockInventory = {
         const used = parseFloat($row.find('.stock-used').val()) || 0;
         const date = $('#stockDate').val() || new Date().toISOString().split('T')[0];
         
-        Stand120.ajax('save_stock_inventory', {
+        const data = {
             product_id: productId,
             date: date,
             used_packs: used
-        }).then(response => {
+        };
+        
+        // Include opening value so admin inline edits are persisted
+        if (Stand120.config.is_admin) {
+            data.opening_packs = parseFloat($row.find('.stock-opening').val()) || 0;
+        }
+        
+        Stand120.ajax('save_stock_inventory', data).then(response => {
             if (response.success) {
                 $row.addClass('saved');
                 setTimeout(() => $row.removeClass('saved'), 500);
@@ -1198,13 +1212,20 @@ window.ChoppingInventory = {
         const remarks = $row.find('.chop-remarks').val();
         const date = $('#chopDate').val() || new Date().toISOString().split('T')[0];
         
-        Stand120.ajax('save_chopping_inventory', {
+        const data = {
             product_id: productId,
             date: date,
             prepared: prepared,
             packs_gotten: packs,
             remarks: remarks
-        }).then(response => {
+        };
+        
+        // Include opening value so admin inline edits are persisted
+        if (Stand120.config.is_admin) {
+            data.opening_whole = parseFloat($row.find('.chop-opening').val()) || 0;
+        }
+        
+        Stand120.ajax('save_chopping_inventory', data).then(response => {
             if (response.success) {
                 $row.addClass('saved');
                 setTimeout(() => $row.removeClass('saved'), 500);
