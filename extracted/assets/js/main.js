@@ -879,9 +879,15 @@ window.OrderPreparation = {
         const self = this;
         
         // Real-time calculation on input change - using multiple events for responsiveness
-        $(document).off('input.orderprep change.orderprep keyup.orderprep', '.prep-added, .prep-sold, .prep-opening');
-        $(document).on('input.orderprep change.orderprep keyup.orderprep', '.prep-added, .prep-sold, .prep-opening', function(e) {
+        $(document).off('input.orderprep change.orderprep keyup.orderprep', '.prep-added, .prep-sold, .prep-opening, .prep-remarks');
+        $(document).on('input.orderprep change.orderprep keyup.orderprep', '.prep-added, .prep-sold, .prep-opening, .prep-remarks', function(e) {
             self.handleInputChange(e);
+        });
+        
+        // Save Remarks button
+        $(document).off('click.orderprep', '#savePrepRemarks');
+        $(document).on('click.orderprep', '#savePrepRemarks', function() {
+            self.saveAllRemarks();
         });
     },
     
@@ -892,7 +898,11 @@ window.OrderPreparation = {
             if (response.success) {
                 this.data = response.data.data || [];
                 this.renderTable();
+            } else {
+                Stand120.showAlert('danger', response.data?.message || 'Failed to load order preparation data');
             }
+        }).catch(() => {
+            Stand120.showAlert('danger', 'Failed to load order preparation data. Please refresh the page.');
         });
     },
     
@@ -903,7 +913,7 @@ window.OrderPreparation = {
         const isAdmin = Stand120.config.is_admin;
         
         if (!this.data || this.data.length === 0) {
-            $tbody.append('<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No fruits found. Admin can add fruits in the Admin Panel.</td></tr>');
+            $tbody.append('<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">No menu items found. Admin can add menu items in the Admin Panel.</td></tr>');
             return;
         }
         
@@ -919,22 +929,21 @@ window.OrderPreparation = {
                     <td>
                         <input type="number" class="table-input prep-opening" 
                             value="${opening}" 
-                            ${!isAdmin ? 'readonly' : ''} 
-                            data-field="opening">
+                            ${!isAdmin ? 'readonly' : ''}>
                     </td>
                     <td>
-                        <input type="number" class="table-input prep-added auto-save-input" 
-                            value="${added}" min="0" 
-                            data-field="total_added"
-                            data-save-action="save_order_preparation">
+                        <input type="number" class="table-input prep-added" 
+                            value="${added}" min="0">
                     </td>
                     <td>
-                        <input type="number" class="table-input prep-sold auto-save-input" 
-                            value="${sold}" min="0" 
-                            data-field="total_sold"
-                            data-save-action="save_order_preparation">
+                        <input type="number" class="table-input prep-sold" 
+                            value="${sold}" min="0">
                     </td>
                     <td class="prep-closing formatted-number">${Stand120.formatNumber(closing)}</td>
+                    <td>
+                        <input type="text" class="table-input prep-remarks" 
+                            value="${item.remarks || ''}" placeholder="Add remarks...">
+                    </td>
                 </tr>
             `;
             $tbody.append(row);
@@ -964,13 +973,15 @@ window.OrderPreparation = {
         const productId = $row.data('product-id');
         const added = parseFloat($row.find('.prep-added').val()) || 0;
         const sold = parseFloat($row.find('.prep-sold').val()) || 0;
+        const remarks = $row.find('.prep-remarks').val() || '';
         const date = $('#prepDate').val() || new Date().toISOString().split('T')[0];
         
         const data = {
             product_id: productId,
             date: date,
             total_added: added,
-            total_sold: sold
+            total_sold: sold,
+            remarks: remarks
         };
         
         // Include opening value so admin inline edits are persisted
@@ -982,7 +993,58 @@ window.OrderPreparation = {
             if (response.success) {
                 $row.addClass('saved');
                 setTimeout(() => $row.removeClass('saved'), 500);
+            } else {
+                Stand120.showAlert('danger', response.data?.message || 'Failed to save');
             }
+        }).catch(() => {
+            Stand120.showAlert('danger', 'Failed to save. Please check your connection.');
+        });
+    },
+    
+    saveAllRemarks: function() {
+        const date = $('#prepDate').val() || new Date().toISOString().split('T')[0];
+        const self = this;
+        let saveCount = 0;
+        const rows = $('#prepTable tbody tr[data-product-id]');
+        const totalRows = rows.length;
+        
+        if (totalRows === 0) return;
+        
+        Stand120.showLoading('Saving remarks...');
+        
+        rows.each(function() {
+            const $row = $(this);
+            const productId = $row.data('product-id');
+            const added = parseFloat($row.find('.prep-added').val()) || 0;
+            const sold = parseFloat($row.find('.prep-sold').val()) || 0;
+            const remarks = $row.find('.prep-remarks').val() || '';
+            
+            const data = {
+                product_id: productId,
+                date: date,
+                total_added: added,
+                total_sold: sold,
+                remarks: remarks
+            };
+            
+            if (Stand120.config.is_admin) {
+                data.opening_value = parseFloat($row.find('.prep-opening').val()) || 0;
+            }
+            
+            Stand120.ajax('save_order_preparation', data).then(response => {
+                saveCount++;
+                if (saveCount >= totalRows) {
+                    Stand120.hideLoading();
+                    Stand120.showAlert('success', 'Remarks saved successfully');
+                    self.loadData();
+                }
+            }).catch(() => {
+                saveCount++;
+                if (saveCount >= totalRows) {
+                    Stand120.hideLoading();
+                    Stand120.showAlert('danger', 'Some remarks failed to save');
+                }
+            });
         });
     }
 };
@@ -1015,7 +1077,11 @@ window.StockInventory = {
             if (response.success) {
                 this.data = response.data.data || [];
                 this.renderTable();
+            } else {
+                Stand120.showAlert('danger', response.data?.message || 'Failed to load stock inventory data');
             }
+        }).catch(() => {
+            Stand120.showAlert('danger', 'Failed to load stock inventory data. Please refresh the page.');
         });
     },
     
@@ -1045,15 +1111,12 @@ window.StockInventory = {
                     <td>
                         <input type="number" class="table-input stock-opening" 
                             value="${opening}" 
-                            ${!isAdmin ? 'readonly' : ''} 
-                            data-field="opening">
+                            ${!isAdmin ? 'readonly' : ''}>
                     </td>
                     <td class="stock-added formatted-number">${Stand120.formatNumber(added)}</td>
                     <td>
-                        <input type="number" class="table-input stock-used auto-save-input" 
-                            value="${used}" min="0" 
-                            data-field="used_packs"
-                            data-save-action="save_stock_inventory">
+                        <input type="number" class="table-input stock-used" 
+                            value="${used}" min="0">
                     </td>
                     <td class="stock-closing formatted-number">${Stand120.formatNumber(closing)}</td>
                 </tr>
@@ -1102,7 +1165,11 @@ window.StockInventory = {
             if (response.success) {
                 $row.addClass('saved');
                 setTimeout(() => $row.removeClass('saved'), 500);
+            } else {
+                Stand120.showAlert('danger', response.data?.message || 'Failed to save');
             }
+        }).catch(() => {
+            Stand120.showAlert('danger', 'Failed to save. Please check your connection.');
         });
     }
 };
@@ -1135,7 +1202,11 @@ window.ChoppingInventory = {
             if (response.success) {
                 this.data = response.data.data || [];
                 this.renderTable();
+            } else {
+                Stand120.showAlert('danger', response.data?.message || 'Failed to load chopping inventory data');
             }
+        }).catch(() => {
+            Stand120.showAlert('danger', 'Failed to load chopping inventory data. Please refresh the page.');
         });
     },
     
@@ -1167,16 +1238,16 @@ window.ChoppingInventory = {
                     </td>
                     <td class="chop-import formatted-number">${Stand120.formatNumber(importVal)}</td>
                     <td>
-                        <input type="number" class="table-input chop-prepared auto-save-input" 
+                        <input type="number" class="table-input chop-prepared" 
                             value="${prepared}" min="0">
                     </td>
                     <td class="chop-closing formatted-number">${Stand120.formatNumber(closing)}</td>
                     <td>
-                        <input type="number" class="table-input chop-packs auto-save-input" 
+                        <input type="number" class="table-input chop-packs" 
                             value="${packs}" min="0">
                     </td>
                     <td>
-                        <input type="text" class="table-input chop-remarks auto-save-input" 
+                        <input type="text" class="table-input chop-remarks" 
                             value="${item.remarks || ''}" placeholder="Add remarks...">
                     </td>
                 </tr>
@@ -1229,7 +1300,11 @@ window.ChoppingInventory = {
             if (response.success) {
                 $row.addClass('saved');
                 setTimeout(() => $row.removeClass('saved'), 500);
+            } else {
+                Stand120.showAlert('danger', response.data?.message || 'Failed to save');
             }
+        }).catch(() => {
+            Stand120.showAlert('danger', 'Failed to save. Please check your connection.');
         });
     }
 };
@@ -1256,13 +1331,22 @@ window.ImportRecord = {
             if (response.success) {
                 this.data = response.data.data;
                 this.renderTable();
+            } else {
+                Stand120.showAlert('danger', response.data?.message || 'Failed to load import records');
             }
+        }).catch(() => {
+            Stand120.showAlert('danger', 'Failed to load import records. Please refresh the page.');
         });
     },
     
     renderTable: function() {
         const $tbody = $('#importTable tbody');
         $tbody.empty();
+        
+        if (!this.data || this.data.length === 0) {
+            $tbody.append('<tr><td colspan="3" style="text-align: center; color: var(--text-muted);">No products found. Admin can add products in the Admin Panel.</td></tr>');
+            return;
+        }
         
         this.data.forEach(item => {
             const statusClass = item.sync_status === 'synced' ? 'status-synced' : 
@@ -1275,7 +1359,7 @@ window.ImportRecord = {
                         <span class="badge badge-${item.product_type}">${item.product_type}</span>
                     </td>
                     <td>
-                        <input type="number" class="table-input import-qty auto-save-input" 
+                        <input type="number" class="table-input import-qty" 
                             value="${item.quantity}" min="0">
                     </td>
                     <td>
@@ -1300,8 +1384,9 @@ window.ImportRecord = {
             .addClass('status-syncing')
             .html('<i class="fas fa-sync fa-spin"></i> syncing');
         
-        // Auto-save
-        this.saveRow($row);
+        // Auto-save with debounce
+        clearTimeout($row.data('saveTimeout'));
+        $row.data('saveTimeout', setTimeout(() => this.saveRow($row), 500));
     },
     
     saveRow: function($row) {
@@ -1319,7 +1404,19 @@ window.ImportRecord = {
                     .removeClass('status-syncing status-pending')
                     .addClass('status-synced')
                     .html('<i class="fas fa-check"></i> synced');
+            } else {
+                $row.find('.status-badge')
+                    .removeClass('status-syncing')
+                    .addClass('status-pending')
+                    .html('<i class="fas fa-exclamation-triangle"></i> failed');
+                Stand120.showAlert('danger', response.data?.message || 'Failed to save import record');
             }
+        }).catch(() => {
+            $row.find('.status-badge')
+                .removeClass('status-syncing')
+                .addClass('status-pending')
+                .html('<i class="fas fa-exclamation-triangle"></i> failed');
+            Stand120.showAlert('danger', 'Failed to save. Please check your connection.');
         });
     }
 };

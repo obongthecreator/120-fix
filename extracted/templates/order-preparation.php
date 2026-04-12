@@ -90,7 +90,7 @@ include STAND120_PLUGIN_DIR . 'templates/partials/header.php';
         <textarea id="prepRemarks" class="form-control" rows="3" placeholder="Add any remarks or notes here..." style="resize: vertical;"></textarea>
     </div>
     
-    <button id="savePrepRemarks" class="btn btn-success" style="margin-top: 12px;">
+    <button type="button" id="savePrepRemarks" class="btn btn-success" style="margin-top: 12px;">
         <iconify-icon icon="solar:diskette-linear"></iconify-icon> Save Remarks
     </button>
 </div>
